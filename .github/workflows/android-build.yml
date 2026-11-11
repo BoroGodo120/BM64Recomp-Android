@@ -17,8 +17,15 @@ jobs:
       - name: Check ROM
         run: |
           ls -la rom
-          test -f rom/bm64.decomp.us.z64
-          md5sum rom/bm64.decomp.us.z64
+          test -f rom/baserom.z64
+          md5sum rom/baserom.z64
+      - name: Decompress ROM with decomp tool
+        run: |
+          git clone --depth 1 https://github.com/Bomberhackers/bm64.git decomp
+          g++ -O2 -std=c++17 -o bm64decompress decomp/tools/bm64decompress.cpp
+          ./bm64decompress rom/baserom.z64 bm64.decomp.us.z64
+          md5sum bm64.decomp.us.z64
+          test "$(md5sum bm64.decomp.us.z64 | cut -d' ' -f1)" = "d2f9313cccae0af85d23ac37666c0173"
       - name: Install deps
         run: sudo apt-get update && sudo apt-get install -y ninja-build lld clang-15 make
       - name: Build N64Recomp and RSPRecomp
@@ -29,7 +36,6 @@ jobs:
           cp cmake-build/N64Recomp cmake-build/RSPRecomp .
       - name: Generate C code
         run: |
-          cp rom/bm64.decomp.us.z64 .
           ./N64Recomp bm64.us.toml
           ./RSPRecomp aspMain.toml
           ls RecompiledFuncs | wc -l
