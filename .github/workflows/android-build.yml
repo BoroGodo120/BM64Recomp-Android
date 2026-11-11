@@ -1,0 +1,44 @@
+name: android-build
+on:
+  workflow_dispatch:
+jobs:
+  recomp-generate:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Fetch ROM from private repo
+        uses: actions/checkout@v4
+        with:
+          repository: BoroGodo120/bm64-rom-private
+          token: ${{ secrets.ROM_REPO_TOKEN }}
+          path: rom
+      - name: Check ROM
+        run: |
+          ls -la rom
+          test -f rom/bm64.decomp.us.z64
+          md5sum rom/bm64.decomp.us.z64
+      - name: Install deps
+        run: sudo apt-get update && sudo apt-get install -y ninja-build lld clang-15 make
+      - name: Build N64Recomp and RSPRecomp
+        run: |
+          git clone https://github.com/N64Recomp/N64Recomp.git --recurse-submodules N64RecompSource
+          cmake -DCMAKE_BUILD_TYPE=Release -G Ninja -S N64RecompSource -B cmake-build
+          cmake --build cmake-build --target N64Recomp RSPRecomp -j $(nproc)
+          cp cmake-build/N64Recomp cmake-build/RSPRecomp .
+      - name: Generate C code
+        run: |
+          cp rom/bm64.decomp.us.z64 .
+          ./N64Recomp bm64.us.toml
+          ./RSPRecomp aspMain.toml
+          ls RecompiledFuncs | wc -l
+      - name: Build MIPS patches
+        run: make -C patches CC=clang-15 LD=ld.lld
+      - name: Pack generated code
+        run: tar -czf generated.tar.gz RecompiledFuncs RecompiledPatches patches/patches.bin patches/patches.elf
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generated-code
+          path: generated.tar.gz
+          retention-days: 3
